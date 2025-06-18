@@ -27,6 +27,6 @@
 ### Как поддержать проект
 Этот проект создается энтузиастом в свободное время. Ваша поддержка поможет ускорить разработку, добавить новый контент и реализовать нативную версию для Android.
 
-Вы можете поддержать меня через GitHub?.
+You can support me with a direct transfer to a bank card 5355280216709301 name Dmytro surname Smyk PUMB bank of Ukraine. Due to the war, I do not have direct access to Internet banking yet, so if you sent something to my card, please let me know.
 
 ---
