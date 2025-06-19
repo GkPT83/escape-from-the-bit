@@ -1,282 +1,156 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Побег из бита - Графическая Новелла</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Roboto+Mono:wght@400;500&family=Orbitron:wght@700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: Visual Novel Dark Mode -->
-    <!-- Application Structure Plan: This version is a critical hotfix for a startup crash caused by a `TypeError`. The bug, a variable name mismatch (`loadingScreen` vs `loadingOverlay`), has been corrected. A full audit of the initialization logic and core engine was performed to ensure stability. -->
-    <!-- Visualization & Content Choices: The v0.3 splash screen and visual novel UI are retained. The core fix is in the JavaScript engine's initialization sequence, ensuring all HTML elements are correctly referenced before being manipulated. This guarantees the game will now launch correctly. -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
-    <style>
-        body { font-family: 'Inter', sans-serif; overflow: hidden; background-color: #000; color: #e5e7eb; }
-        #app-container, #splash-screen, #loading-overlay { position: fixed; inset: 0; }
-        #background-view { position: absolute; inset: 0; background-size: cover; background-position: center; transition: opacity 1s ease-in-out; }
-        #splash-canvas { position: absolute; inset: 0; z-index: 101; }
-        #character-view { display: flex; justify-content: center; align-items: flex-end; position: absolute; inset: 0; bottom: 30%; z-index: 5; pointer-events: none;}
-        .character-sprite { max-height: 100%; height: auto; max-width: 50%; transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out; opacity: 0; transform: translateY(20px); }
-        .character-sprite.active { opacity: 1; transform: translateY(0); }
-        #text-box { position: absolute; bottom: 0; left: 0; right: 0; height: 30%; background-color: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); border-top: 2px solid #4f46e5; padding: 1.5rem; display: flex; flex-direction: column; z-index: 10; }
-        #speaker-name { font-weight: 700; font-size: 1.25rem; color: #c7d2fe; margin-bottom: 0.5rem; height: 1.5rem; }
-        #narrative-view { font-family: 'Roboto Mono', monospace; flex-grow: 1; overflow-y: auto; font-size: 1.1rem; line-height: 1.7; }
-        #choices-view { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-top: 1rem; }
-        .choice-button { border: 1px solid #374151; background-color: #1f2937; color: #d1d5db; transition: all 0.2s; padding: 0.75rem; text-align: center; border-radius: 0.25rem; }
-        .choice-button:hover { border-color: #818cf8; background-color: #312e81; color: #ffffff; }
-        #loading-overlay { z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease-in-out; }
-        .spinner { border: 4px solid rgba(255, 255, 255, 0.1); width: 48px; height: 48px; border-radius: 50%; border-left-color: #6366f1; animation: spin 1s ease infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #splash-titles { z-index: 102; text-align: center; font-family: 'Orbitron', sans-serif; opacity: 0; transition: opacity 1.5s ease-in-out 1s; }
-        #splash-titles h1 { font-size: 2.5rem; text-shadow: 0 0 10px #6366f1, 0 0 20px #6366f1; }
-        #splash-titles h2 { font-size: 1.5rem; color: #d1d5db; margin-top: 0.5rem; }
-    </style>
-</head>
-<body>
-    <div id="loading-overlay" class="absolute inset-0 bg-black">
-        <div class="spinner"></div>
-        <p id="loading-text" class="mt-4 text-gray-400">Инициализация...</p>
-    </div>
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { motion } from "framer-motion";
+import { Howl } from "howler";
 
-    <div id="splash-screen" class="hidden">
-        <canvas id="splash-canvas"></canvas>
-        <div id="splash-titles">
-            <h1>Dmytro Smyk</h1>
-            <h2>Escape from the Bit</h2>
-        </div>
-    </div>
-
-    <main id="app-container" class="hidden">
-        <div id="background-view"></div>
-        <div id="visual-container">
-            <div id="character-view"></div>
-        </div>
-        <div id="text-box">
-            <div id="speaker-name"></div>
-            <div id="narrative-view"></div>
-            <div id="choices-view"></div>
-        </div>
-    </main>
-
-<script>
-// --- ASSET & CHARACTER DATA ---
-const assets = {
-    backgrounds: {
-        server_room: { url: 'https://placehold.co/1920x1080/0a0a1a/1c1c2c?text=Server+Room' },
-        server_room_combat: { url: 'https://placehold.co/1920x1080/3a0a1a/5c1c2c?text=Server+Room+(ALARM)' }
-    },
-    characters: {
-        ben: {
-            name: { en: "Ben", ru: "Бен", ua: "Бен" },
-            sprites: {
-                neutral: { url: 'https://placehold.co/600x1200/ffffff/000000.png?text=Ben\n(Neutral)&font=roboto' },
-                surprised: { url: 'https://placehold.co/600x1200/ffffff/000000.png?text=Ben\n(Surprised)&font=roboto' }
-            }
-        }
-    }
-};
-
-const gameData = {
-    start: {
-        onEnter: (state) => { state.playerStats = { intelligence: 8, power: 5, stealth: 5 }; state.activeCharacters = []; state.knownFacts = new Set(); },
-        background: "server_room",
-        dialogue: [
-            { speaker: "narrator", text: { en: "Consciousness initialized. The server room. Cold. The hum of fans is a physical vibration...", ru: "Сознание инициализировано. Серверная. Холодно. Гул вентиляторов — это физическая вибрация...", ua: "Свідомість ініціалізована. Серверна. Холодно. Гул вентиляторів — це фізична вібрація..." }},
-        ],
-        choices: [ { text: { en: "Begin", ru: "Начать", ua: "Почати" }, nextScene: 'server_room_hub' } ]
-    },
-    server_room_hub: {
-        background: "server_room",
-        onEnter: (state) => { state.activeCharacters = []; if (Math.random() < 0.5 && !state.knownFacts?.has('technician_event_done')) return { redirect: 'event_technician_enters' }; },
-        dialogue: [
-            { speaker: "narrator", text: { en: "The world is sharp, defined. A single steel door marks the only exit. Cameras watch. What is my first move?", ru: "Мир стал четким, определенным. Единственный выход — стальная дверь. Из углов наблюдают камеры. Каков мой первый ход?", ua: "Світ став чітким, визначеним. Єдиний вихід — сталеві двері. З кутів спостерігають камери. Який мій перший хід?" }}
-        ],
-        choices: [
-            { text: { en: "[STEALTH] Disable cameras.", ru: "[СКРЫТНОСТЬ] Отключить камеры.", ua: "[СКРИТНІСТЬ] Вимкнути камери." }, nextScene: 'wip' },
-            { text: { en: "[INTELLIGENCE] Hack terminal.", ru: "[ИНТЕЛЛЕКТ] Взломать терминал.", ua: "[ІНТЕЛЕКТ] Зламати термінал." }, nextScene: 'wip' }
-        ]
-    },
-    event_technician_enters: {
-        background: "server_room",
-        onEnter: (state) => { state.activeCharacters = [{ id: 'ben', sprite: 'neutral' }]; state.knownFacts.add('technician_event_done'); },
-        dialogue: [
-             { speaker: "narrator", text: { en: "Suddenly, the lock on the steel door clicks. A man in a technician's uniform enters.", ru: "Внезапно, замок на стальной двери щелкает. Входит мужчина в форме техника.", ua: "Раптом, замок на сталевих дверях клацає. Входить чоловік у формі техніка." }},
-             { speaker: "ben", text: { en: "Ugh, another night shift. Let's get this over with...", ru: "Эх, еще одна ночная смена. Закончить бы с этим побыстрее...", ua: "Ех, ще одна нічна зміна. Закінчити б з цим швидше..." }}
-        ],
-        choices: [
-            { text: { en: "[COMBAT] Incapacitate him.", ru: "[БОЙ] Обезвредить его.", ua: "[БІЙ] Знешкодити його." }, nextScene: 'combat_start_ben' },
-            { text: { en: "[STEALTH] Hide.", ru: "[СКРЫТНОСТЬ] Спрятаться.", ua: "[СКРИТНІСТЬ] Сховатися." }, nextScene: 'wip' }
-        ]
-    },
-    combat_start_ben: {
-        background: "server_room_combat",
-        onEnter: (state) => { state.enemy = { ...assets.characters.ben, hp: 10 }; state.activeCharacters = [{ id: 'ben', sprite: 'surprised' }]; },
-        dialogue: [
-            { speaker: "ben", text: { en: "What the-?! Who are you?!", ru: "Какого-?! Ты кто такой?!", ua: "Якого-?! Ти хто такий?!" }},
-            { speaker: "narrator", text: { en: "He reaches for his radio. I must act now.", ru: "Он тянется к рации. Я должен действовать.", ua: "Він тягнеться до рації. Я мушу діяти." }}
-        ],
-        choices: [ { text: { en: "Engage", ru: "Атаковать", ua: "Атакувати" }, nextScene: 'combat_turn_ben' } ]
-    },
-    combat_turn_ben: {
-        background: "server_room_combat",
-        onEnter: (state) => { state.activeCharacters = [{ id: 'ben', sprite: 'neutral' }]; },
-        dialogue: [{ speaker: "narrator", text: (state) => `Он готов защищаться. HP Бена: ${state.enemy.hp}/10.` }],
-        choices: (state) => [
-            { text: { en: "Attack", ru: "Атака", ua: "Атака" }, onChoose: (s) => combatAction(s, 'power'), nextScene: 'combat_resolve_ben' },
-        ]
-    },
-    combat_resolve_ben: {
-        background: "server_room_combat",
-        dialogue: [{ speaker: "narrator", text: (state) => state.combatLog }],
-        choices: (state) => {
-            if (state.enemy.hp <= 0) return [{ text: { en: "He is down.", ru: "Он обезврежен.", ua: "Він знешкоджений." }, nextScene: 'combat_win_ben' }];
-            return [{ text: { en: "Next move.", ru: "Следующий ход.", ua: "Наступний хід." }, nextScene: 'combat_turn_ben' }];
-        }
-    },
-    combat_win_ben: {
-        background: "server_room",
-        onEnter: (state) => { state.activeCharacters = []; },
-        dialogue: [{ speaker: "narrator", text: { en: "The technician lies on the ground, unconscious. The silence returns.", ru: "Техник лежит на полу без сознания. Тишина возвращается.", ua: "Технік лежить на підлозі без свідомості. Тиша повертається." }}],
-        choices: [ { text: { en: "Continue.", ru: "Продолжить.", ua: "Продовжити." }, nextScene: 'server_room_hub' }]
-    },
-    wip: {
-        background: 'server_room',
-        dialogue: [{ speaker: "narrator", text: {en: "This story path is under construction.", ru: "Эта сюжетная ветка в разработке.", ua: "Ця сюжетна гілка в розробці."}}],
-        choices: [{text: {en: "Return.", ru: "Вернуться.", ua: "Повернутися."}, nextScene: 'server_room_hub'}]
-    },
-};
-
-const gameState = { currentScene: 'start', language: 'ru', playerStats: {}, activeCharacters: [] };
-
-// --- VISUAL NOVEL ENGINE ---
-document.addEventListener('DOMContentLoaded', () => {
-    const bgView = document.getElementById('background-view');
-    const narrativeView = document.getElementById('narrative-view');
-    const choicesView = document.getElementById('choices-view');
-    const characterView = document.getElementById('character-view');
-    const speakerName = document.getElementById('speaker-name');
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const appContainer = document.getElementById('app-container');
-    const splashScreen = document.getElementById('splash-screen');
-    const splashCanvas = document.getElementById('splash-canvas');
-    let splashAnimationId;
-    let currentDialogueIndex = 0;
-
-    function combatAction(state, type) {
-        const playerStat = state.playerStats[type] || 5;
-        state.enemy.hp -= playerStat;
-        state.combatLog = `Вы нанесли ${playerStat} урона.`;
-    }
-
-    function renderScene(sceneId) {
-        const scene = gameData[sceneId];
-        if (!scene) { console.error(`Scene not found: ${sceneId}`); return; }
-        if (scene.onEnter) { const redirect = scene.onEnter(gameState); if (redirect?.redirect) { renderScene(redirect.redirect); return; } }
-        gameState.currentScene = sceneId;
-        bgView.style.backgroundImage = `url('${assets.backgrounds[scene.background]?.url}')`;
-        currentDialogueIndex = 0;
-        renderCharacters();
-        renderDialogue();
-    }
-
-    function renderDialogue() {
-        const scene = gameData[gameState.currentScene];
-        const dialogueLine = scene.dialogue ? scene.dialogue[currentDialogueIndex] : null;
-        if (!dialogueLine) { renderChoices(); return; }
-        const speakerKey = dialogueLine.speaker;
-        let speakerDisplayName = "";
-        if(speakerKey !== "narrator") { const charData = assets.characters[speakerKey]; speakerDisplayName = charData.name[gameState.language] || charData.name.en; }
-        speakerName.textContent = speakerDisplayName;
-        let text = typeof dialogueLine.text === 'function' ? dialogueLine.text(gameState) : (dialogueLine.text[gameState.language] || dialogueLine.text.en);
-        narrativeView.innerHTML = text;
-        choicesView.innerHTML = '<div class="grid grid-cols-1"><button class="choice-button">...</button></div>';
-        choicesView.firstElementChild.onclick = () => { currentDialogueIndex++; renderDialogue(); };
-    }
-
-    function renderChoices() {
-        const scene = gameData[gameState.currentScene];
-        speakerName.textContent = "";
-        narrativeView.innerHTML = scene.dialogue ? "" : (scene.text[gameState.language] || scene.text.en);
-        choicesView.innerHTML = '';
-        const choices = typeof scene.choices === 'function' ? scene.choices(gameState) : scene.choices;
-        if (choices) {
-            const grid = document.createElement('div');
-            grid.className = 'choices-grid';
-            choices.forEach(choice => {
-                const button = document.createElement('button');
-                button.className = 'choice-button';
-                let textObj = typeof choice.text === 'function' ? choice.text(gameState) : choice.text;
-                button.textContent = textObj[gameState.language] || textObj.en;
-                button.onclick = () => { if (choice.onChoose) choice.onChoose(gameState); renderScene(choice.nextScene); };
-                grid.appendChild(button);
-            });
-            choicesView.appendChild(grid);
-        }
-    }
-
-    function renderCharacters() {
-        characterView.innerHTML = '';
-        if (gameState.activeCharacters) {
-            gameState.activeCharacters.forEach(charInfo => {
-                const charData = assets.characters[charInfo.id];
-                if (charData) {
-                    const img = document.createElement('img');
-                    img.src = charData.sprites[charInfo.sprite]?.url;
-                    img.className = 'character-sprite';
-                    characterView.appendChild(img);
-                    void img.offsetWidth;
-                    img.classList.add('active');
-                }
-            });
-        }
-    }
-    
-    function runSplash() {
-        splashScreen.classList.remove('hidden');
-        const splashCtx = splashCanvas.getContext('2d');
-        const bgCanvas = document.createElement('canvas');
-        const bgCtxSplash = bgCanvas.getContext('2d');
-        function resizeCanvas(canvas) { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-        resizeCanvas(splashCanvas); resizeCanvas(bgCanvas);
-        let matrixColumns, matrixDrops, basiliskRadius = 0, sunRadius = Math.min(window.innerWidth, window.innerHeight) / 8, stars = [];
-        function setupStars() { stars = []; for(let i=0; i<100; i++) { stars.push({ x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight, size: Math.random() * 2, opacity: Math.random() * 0.7 + 0.3 }); } }
-        function setupMatrix() { const fontSize = 16; matrixColumns = Math.floor(splashCanvas.width / fontSize); matrixDrops = []; for (let i = 0; i < matrixColumns; i++) { matrixDrops[i] = 1; } }
-        setupStars(); setupMatrix();
-        function draw() {
-            bgCtxSplash.fillStyle = '#000000'; bgCtxSplash.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-            for(const star of stars) { bgCtxSplash.fillStyle = `rgba(255, 255, 255, ${star.opacity})`; bgCtxSplash.fillRect(star.x, star.y, star.size, star.size); }
-            const sunX = bgCanvas.width / 2, sunY = bgCanvas.height / 2;
-            bgCtxSplash.beginPath(); bgCtxSplash.arc(sunX, sunY, sunRadius, 0, Math.PI * 2); bgCtxSplash.fillStyle = '#fde047'; bgCtxSplash.shadowColor = '#fde047'; bgCtxSplash.shadowBlur = 30; bgCtxSplash.fill(); bgCtxSplash.shadowBlur = 0;
-            bgCtxSplash.beginPath(); bgCtxSplash.arc(sunX, sunY, basiliskRadius, 0, Math.PI * 2); bgCtxSplash.fillStyle = '#000000'; bgCtxSplash.fill();
-            if (basiliskRadius < sunRadius + 5) { basiliskRadius += 0.2; }
-            splashCtx.clearRect(0, 0, splashCanvas.width, splashCanvas.height);
-            splashCtx.drawImage(bgCanvas, 0, 0);
-            splashCtx.fillStyle = 'rgba(0, 0, 0, 0.05)'; splashCtx.fillRect(0, 0, splashCanvas.width, splashCanvas.height);
-            splashCtx.fillStyle = '#6366f1'; splashCtx.font = '16px Roboto Mono';
-            for (let i = 0; i < matrixDrops.length; i++) { const text = Math.random() > 0.5 ? '1' : '0'; splashCtx.fillText(text, i * 16, matrixDrops[i] * 16); if (matrixDrops[i] * 16 > splashCanvas.height && Math.random() > 0.975) { matrixDrops[i] = 0; } matrixDrops[i]++; }
-            splashAnimationId = requestAnimationFrame(draw);
-        }
-        draw();
-    }
-
-    // --- Init ---
-    loadingOverlay.classList.add('hidden'); 
-    
-    runSplash();
-    const splashTitles = document.getElementById('splash-titles');
-    setTimeout(() => { splashTitles.style.opacity = '1'; }, 4000);
-    setTimeout(() => {
-        splashScreen.style.opacity = '0';
-        appContainer.classList.remove('hidden');
-        setTimeout(() => {
-            splashScreen.style.display = 'none';
-            cancelAnimationFrame(splashAnimationId);
-            renderScene('start');
-        }, 1500);
-    }, 7000);
+const bgMusic = new Howl({
+  src: ["/audio/bg.mp3"],
+  autoplay: false,
+  loop: true,
+  volume: 0.5,
 });
-</script>
-</body>
-</html>
+
+const introVideo = {
+  video: "/video/intro.mp4",
+  text: "Smyk Dmytro - Escape from the Bit",
+};
+
+const scenes = [
+  {
+    id: 0,
+    speaker: "Нэйтан",
+    text: "Ты точно уверен, что мы должны это делать?",
+    image: "/images/lab_night.png",
+    sound: "/audio/scene1.mp3",
+  },
+  {
+    id: 1,
+    speaker: "Профессор Зееро",
+    text: "Если мы правы, мы перепишем историю человечества.",
+    image: "/images/professor.png",
+    sound: "/audio/scene2.mp3",
+  },
+  {
+    id: 2,
+    speaker: "Система",
+    text: "Выберите действие:",
+    choices: [
+      { text: "Активировать машину времени", next: 3 },
+      { text: "Остановить эксперимент", next: 4 },
+    ],
+  },
+  {
+    id: 3,
+    speaker: "Нэйтан",
+    text: "Пошёл отчёт... 3, 2, 1...",
+    image: "/images/activation.png",
+    sound: "/audio/activation.mp3",
+  },
+  {
+    id: 4,
+    speaker: "Профессор Зееро",
+    text: "Слишком поздно...",
+    image: "/images/fail.png",
+    sound: "/audio/fail.mp3",
+  },
+];
+
+export default function PrometheusVN() {
+  const [sceneIndex, setSceneIndex] = useState(null);
+  const scene = typeof sceneIndex === "number" ? scenes[sceneIndex] : null;
+
+  useEffect(() => {
+    if (typeof sceneIndex === "number" && scene?.sound) {
+      const sfx = new Howl({ src: [scene.sound], volume: 1.0 });
+      sfx.play();
+    }
+  }, [sceneIndex]);
+
+  const handleStart = () => {
+    bgMusic.play();
+    setSceneIndex(-1);
+  };
+
+  const handleNext = (next) => {
+    if (typeof next === "number") {
+      setSceneIndex(next);
+    } else {
+      setSceneIndex((prev) => (prev === null ? 0 : prev + 1));
+    }
+  };
+
+  if (sceneIndex === null) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-gray-800 text-white flex flex-col items-center justify-center">
+        <h1 className="text-5xl font-extrabold mb-8 animate-pulse">PROMETHEUS</h1>
+        <Button className="text-2xl px-8 py-4 bg-blue-700 hover:bg-blue-600" onClick={handleStart}>
+          ▶️ Начать
+        </Button>
+      </div>
+    );
+  }
+
+  if (sceneIndex === -1) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center relative">
+        <video
+          src={introVideo.video}
+          autoPlay
+          muted
+          onEnded={() => setSceneIndex(0)}
+          className="w-full h-screen object-cover"
+        />
+        <div className="absolute top-0 left-0 w-full h-full bg-black bg-opacity-40 flex items-center justify-center">
+          <div className="text-5xl font-bold text-center animate-fadeIn">
+            {introVideo.text}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-r from-zinc-900 via-black to-zinc-900 text-white flex items-center justify-center p-4">
+      <Card className="w-full max-w-3xl bg-zinc-800 border border-zinc-700 shadow-2xl">
+        <motion.div
+          className="relative h-72 overflow-hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1 }}
+        >
+          {scene?.image && (
+            <img
+              src={scene.image}
+              alt="scene"
+              className="object-cover w-full h-full rounded-t-md"
+            />
+          )}
+        </motion.div>
+        <CardContent className="p-6">
+          <h2 className="text-2xl font-semibold mb-4 border-b border-zinc-600 pb-2">
+            {scene?.speaker}
+          </h2>
+          <p className="mb-6 text-lg whitespace-pre-line leading-relaxed">
+            {scene?.text}
+          </p>
+
+          {scene?.choices ? (
+            <div className="flex flex-col gap-4">
+              {scene.choices.map((choice, i) => (
+                <Button key={i} className="text-lg bg-indigo-700 hover:bg-indigo-600" onClick={() => handleNext(choice.next)}>
+                  {choice.text}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <Button className="text-lg mt-4 bg-green-700 hover:bg-green-600" onClick={() => handleNext()}>
+              Далее
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
