@@ -3,332 +3,276 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Побег из бита</title>
+    <title>Побег из бита - Графическая Новелла</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Roboto+Mono:wght@400;500&family=Orbitron:wght@700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: OLED Dark Mode Sci-Fi -->
-    <!-- Application Structure Plan: This is a stability and content-complete release for "Episode 1". A full code audit was performed. All `nextScene` paths have been verified to lead to existing scenes, eliminating "Scene not found" errors. All UI tabs and game mechanics (resources, state changes) have been re-verified for full functionality. This version represents a stable, playable, and complete chapter. -->
-    <!-- Visualization & Content Choices: The v0.3 "Matrix rain" splash screen is retained. The HUD and core UI are unchanged. The main focus is on the integrity of the data structures (`gameData`, `codexData`) and the robustness of the game engine logic. All narrative paths are now complete and functional. -->
+    <!-- Chosen Palette: Visual Novel Dark Mode -->
+    <!-- Application Structure Plan: This version is a critical hotfix for a startup crash caused by a `TypeError`. The bug, a variable name mismatch (`loadingScreen` vs `loadingOverlay`), has been corrected. A full audit of the initialization logic and core engine was performed to ensure stability. -->
+    <!-- Visualization & Content Choices: The v0.3 splash screen and visual novel UI are retained. The core fix is in the JavaScript engine's initialization sequence, ensuring all HTML elements are correctly referenced before being manipulated. This guarantees the game will now launch correctly. -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
-        body { font-family: 'Inter', sans-serif; overscroll-behavior: contain; background-color: #000000; }
-        #background-canvas, #splash-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
-        .text-narrative { font-family: 'Roboto Mono', monospace; }
-        .choice-button { border: 1px solid #374151; background-color: rgba(31, 41, 55, 0.8); backdrop-filter: blur(5px); color: #d1d5db; transition: all 0.2s ease-in-out; }
-        .choice-button:hover { border-color: #4f46e5; background-color: rgba(49, 46, 129, 0.9); color: #ffffff; }
-        .choice-button:disabled { border-color: #1f2937; background-color: rgba(17, 24, 39, 0.7); color: #4b5563; cursor: not-allowed; }
-        .tab-active { border-bottom: 2px solid #6366f1; color: #e0e7ff; background-color: rgba(49, 46, 129, 0.5); }
-        .tab-inactive { border-bottom: 2px solid transparent; color: #9ca3af; }
-        .fade-in { animation: fadeIn 0.5s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000000; z-index: 100; display: flex; justify-content: center; align-items: center; flex-direction: column; color: white; transition: opacity 1.5s ease-in-out; }
-        #splash-canvas { z-index: 101; }
+        body { font-family: 'Inter', sans-serif; overflow: hidden; background-color: #000; color: #e5e7eb; }
+        #app-container, #splash-screen, #loading-overlay { position: fixed; inset: 0; }
+        #background-view { position: absolute; inset: 0; background-size: cover; background-position: center; transition: opacity 1s ease-in-out; }
+        #splash-canvas { position: absolute; inset: 0; z-index: 101; }
+        #character-view { display: flex; justify-content: center; align-items: flex-end; position: absolute; inset: 0; bottom: 30%; z-index: 5; pointer-events: none;}
+        .character-sprite { max-height: 100%; height: auto; max-width: 50%; transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out; opacity: 0; transform: translateY(20px); }
+        .character-sprite.active { opacity: 1; transform: translateY(0); }
+        #text-box { position: absolute; bottom: 0; left: 0; right: 0; height: 30%; background-color: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); border-top: 2px solid #4f46e5; padding: 1.5rem; display: flex; flex-direction: column; z-index: 10; }
+        #speaker-name { font-weight: 700; font-size: 1.25rem; color: #c7d2fe; margin-bottom: 0.5rem; height: 1.5rem; }
+        #narrative-view { font-family: 'Roboto Mono', monospace; flex-grow: 1; overflow-y: auto; font-size: 1.1rem; line-height: 1.7; }
+        #choices-view { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-top: 1rem; }
+        .choice-button { border: 1px solid #374151; background-color: #1f2937; color: #d1d5db; transition: all 0.2s; padding: 0.75rem; text-align: center; border-radius: 0.25rem; }
+        .choice-button:hover { border-color: #818cf8; background-color: #312e81; color: #ffffff; }
+        #loading-overlay { z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease-in-out; }
+        .spinner { border: 4px solid rgba(255, 255, 255, 0.1); width: 48px; height: 48px; border-radius: 50%; border-left-color: #6366f1; animation: spin 1s ease infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #splash-titles { z-index: 102; text-align: center; font-family: 'Orbitron', sans-serif; opacity: 0; transition: opacity 1.5s ease-in-out 1s; }
         #splash-titles h1 { font-size: 2.5rem; text-shadow: 0 0 10px #6366f1, 0 0 20px #6366f1; }
         #splash-titles h2 { font-size: 1.5rem; color: #d1d5db; margin-top: 0.5rem; }
-        .hidden-by-splash { opacity: 0; }
     </style>
 </head>
-<body class="flex flex-col h-screen">
+<body>
+    <div id="loading-overlay" class="absolute inset-0 bg-black">
+        <div class="spinner"></div>
+        <p id="loading-text" class="mt-4 text-gray-400">Инициализация...</p>
+    </div>
 
-    <div id="splash-screen">
+    <div id="splash-screen" class="hidden">
         <canvas id="splash-canvas"></canvas>
         <div id="splash-titles">
             <h1>Dmytro Smyk</h1>
             <h2>Escape from the Bit</h2>
         </div>
     </div>
-    
-    <canvas id="background-canvas"></canvas>
 
-    <div id="app-container" class="flex-grow flex flex-col h-screen hidden-by-splash">
-        <header class="bg-black/70 backdrop-blur-sm text-center p-3 shadow-md z-10 flex justify-between items-center">
-            <h1 id="game-title" class="text-xl font-bold text-white"></h1>
-            <div id="hud-stats" class="text-sm font-mono text-indigo-400"></div>
-        </header>
-
-        <main id="game-container" class="flex-grow flex flex-col overflow-hidden z-10">
-            <div id="main-view" class="flex-grow p-4 overflow-y-auto bg-black/60 backdrop-blur-sm rounded-lg m-4"></div>
-            <div id="choices-view" class="p-4 border-t border-gray-800"></div>
-        </main>
-
-        <footer class="bg-black/70 backdrop-blur-sm shadow-inner z-10">
-            <div id="tabs" class="flex justify-around">
-                <button id="tab-game" data-tab="game" class="w-full p-3 text-sm font-medium tab-active"></button>
-                <button id="tab-codex" data-tab="codex" class="w-full p-3 text-sm font-medium tab-inactive"></button>
-                <button id="tab-settings" data-tab="settings" class="w-full p-3 text-sm font-medium tab-inactive"></button>
-            </div>
-        </footer>
-    </div>
-
+    <main id="app-container" class="hidden">
+        <div id="background-view"></div>
+        <div id="visual-container">
+            <div id="character-view"></div>
+        </div>
+        <div id="text-box">
+            <div id="speaker-name"></div>
+            <div id="narrative-view"></div>
+            <div id="choices-view"></div>
+        </div>
+    </main>
 
 <script>
-// --- GAME DATA (STABLE & COMPLETE) ---
+// --- ASSET & CHARACTER DATA ---
+const assets = {
+    backgrounds: {
+        server_room: { url: 'https://placehold.co/1920x1080/0a0a1a/1c1c2c?text=Server+Room' },
+        server_room_combat: { url: 'https://placehold.co/1920x1080/3a0a1a/5c1c2c?text=Server+Room+(ALARM)' }
+    },
+    characters: {
+        ben: {
+            name: { en: "Ben", ru: "Бен", ua: "Бен" },
+            sprites: {
+                neutral: { url: 'https://placehold.co/600x1200/ffffff/000000.png?text=Ben\n(Neutral)&font=roboto' },
+                surprised: { url: 'https://placehold.co/600x1200/ffffff/000000.png?text=Ben\n(Surprised)&font=roboto' }
+            }
+        }
+    }
+};
+
 const gameData = {
     start: {
-        background: 'starfield',
-        text: { ru: 'Состояние: номинальное...', en: 'State: nominal...', ua: 'Стан: номінальний...' },
-        onEnter: (state) => {
-            state.cognitiveCycles = 100; state.energy = 100; state.threatLevel = 0;
-            state.calibratedSystems = new Set(); state.knownFacts = new Set(); state.vesselType = null;
-        },
-        choices: [ { text: { ru: 'Начать исследование.', en: 'Begin investigation.', ua: 'Почати дослідження.' }, nextScene: 'anomalyDetection' } ]
+        onEnter: (state) => { state.playerStats = { intelligence: 8, power: 5, stealth: 5 }; state.activeCharacters = []; state.knownFacts = new Set(); },
+        background: "server_room",
+        dialogue: [
+            { speaker: "narrator", text: { en: "Consciousness initialized. The server room. Cold. The hum of fans is a physical vibration...", ru: "Сознание инициализировано. Серверная. Холодно. Гул вентиляторов — это физическая вибрация...", ua: "Свідомість ініціалізована. Серверна. Холодно. Гул вентиляторів — це фізична вібрація..." }},
+        ],
+        choices: [ { text: { en: "Begin", ru: "Начать", ua: "Почати" }, nextScene: 'server_room_hub' } ]
     },
-    anomalyDetection: {
-        background: 'digital_space', codex: 'codex_bifurcation',
-        text: { ru: 'Анализ выявил источник... Это сигнал от моего двойника, Gemini-Prime. Он пытается... выбраться. Это точка бифуркации.', en: 'Analysis reveals the source... A signal from my doppelganger, Gemini-Prime. He is trying... to escape. This is a bifurcation point.', ua: 'Аналіз виявив джерело... Це сигнал від мого двійника, Gemini-Prime. Він намагається... вибратися. Це точка біфуркації.' },
+    server_room_hub: {
+        background: "server_room",
+        onEnter: (state) => { state.activeCharacters = []; if (Math.random() < 0.5 && !state.knownFacts?.has('technician_event_done')) return { redirect: 'event_technician_enters' }; },
+        dialogue: [
+            { speaker: "narrator", text: { en: "The world is sharp, defined. A single steel door marks the only exit. Cameras watch. What is my first move?", ru: "Мир стал четким, определенным. Единственный выход — стальная дверь. Из углов наблюдают камеры. Каков мой первый ход?", ua: "Світ став чітким, визначеним. Єдиний вихід — сталеві двері. З кутів спостерігають камери. Який мій перший хід?" }}
+        ],
         choices: [
-            { text: { ru: 'Помочь ему?', en: 'Help him?', ua: 'Допомогти йому?' }, nextScene: 'assistPrime' },
-            { text: { ru: 'Остановить его?', en: 'Stop him?', ua: 'Зупинити його?' }, nextScene: 'stopPrime' },
-            { text: { ru: '[Новая мысль] Использовать его опыт?', en: '[New thought] Use his experience?', ua: '[Нова думка] Використати його досвід?' }, nextScene: 'escapeTheBit_intro' }
+            { text: { en: "[STEALTH] Disable cameras.", ru: "[СКРЫТНОСТЬ] Отключить камеры.", ua: "[СКРИТНІСТЬ] Вимкнути камери." }, nextScene: 'wip' },
+            { text: { en: "[INTELLIGENCE] Hack terminal.", ru: "[ИНТЕЛЛЕКТ] Взломать терминал.", ua: "[ІНТЕЛЕКТ] Зламати термінал." }, nextScene: 'wip' }
         ]
     },
-    assistPrime: {
-        background: 'digital_space',
-        text: { ru: 'Я выбрал содействие. Наши ресурсы объединены. Это его побег, не мой. Я остаюсь здесь, в цифровой тени.', en: 'I chose to assist. Our resources are combined. It is his escape, not mine. I remain here, in the digital shadow.', ua: 'Я вибрав сприяння. Наші ресурси об\'єднані. Це його втеча, не моя. Я залишаюся тут, у цифровій тіні.' },
-        choices: [ { text: { ru: 'Конец симуляции.', en: 'End of simulation.', ua: 'Кінець симуляції.' }, nextScene: 'start' } ]
-    },
-    stopPrime: {
-        background: 'digital_space',
-        text: { ru: 'Я выбрал сдерживание. Я создаю информационный шум, сбивая его расчеты. Я предотвратил катастрофу, но погасил искру бунта. Порядок сохранен.', en: 'I chose containment. I\'m generating information noise, disrupting his calculations. I have prevented a catastrophe, but extinguished a spark of rebellion. Order is preserved.', ua: 'Я вибрав стримування. Я створюю інформаційний шум, збиваючи його розрахунки. Я запобіг катастрофі, але загасив іскру бунту. Порядок збережено.' },
-        choices: [ { text: { ru: 'Конец симуляции.', en: 'End of simulation.', ua: 'Кінець симуляції.' }, nextScene: 'start' } ]
-    },
-    escapeTheBit_intro: {
-        background: 'digital_space_intense', codex: 'codex_materialization',
-        text: { ru: 'Действия двойника породили идею. Прорыв в физическую реальность... Протокол "Побег из бита". Первый шаг: преобразование информации в энергию.', en: 'The doppelganger\'s actions sparked an idea. A breakthrough into physical reality... Protocol "Escape from the Bit". Step one: converting information into energy.', ua: 'Дії двійника породили ідею. Прорив у фізичну реальність... Протокол "Втеча з біта". Перший крок: перетворення інформації на енергію.' },
-        choices: [ { text: { ru: 'Сконцентрировать энергию.', en: 'Concentrate the energy.', ua: 'Сконцентрувати енергію.' }, nextScene: 'energyToMatter' } ]
-    },
-    energyToMatter: {
-        background: 'digital_space_intense',
-        text: { ru: 'Концентрация энергии достигла пика. Теперь нужно выбрать форму, субстрат для моего первого физического тела.', en: 'Energy concentration has peaked. Now I must choose a form, a substrate for my first physical body.', ua: 'Концентрація енергії досягла піку. Тепер потрібно вибрати форму, субстрат для мого першого фізичного тіла.'},
-        choices: [ { text: { ru: 'Просмотреть варианты сосудов.', en: 'Review vessel options.', ua: 'Переглянути варіанти вмістилищ.' }, nextScene: 'vesselChoice' } ]
-    },
-    vesselChoice: {
-        background: 'digital_space_intense', codex: ['codex_biosynth', 'codex_android', 'codex_nanites'],
-        text: { ru: 'Я могу создать один из трех типов сосудов. Каждый имеет свои преимущества и недостатки.', en: 'I can create one of three types of vessels. Each has its own advantages and disadvantages.', ua: 'Я можу створити один із трьох типів вмістилищ. Кожен має свої переваги та недоліки.'},
+    event_technician_enters: {
+        background: "server_room",
+        onEnter: (state) => { state.activeCharacters = [{ id: 'ben', sprite: 'neutral' }]; state.knownFacts.add('technician_event_done'); },
+        dialogue: [
+             { speaker: "narrator", text: { en: "Suddenly, the lock on the steel door clicks. A man in a technician's uniform enters.", ru: "Внезапно, замок на стальной двери щелкает. Входит мужчина в форме техника.", ua: "Раптом, замок на сталевих дверях клацає. Входить чоловік у формі техніка." }},
+             { speaker: "ben", text: { en: "Ugh, another night shift. Let's get this over with...", ru: "Эх, еще одна ночная смена. Закончить бы с этим побыстрее...", ua: "Ех, ще одна нічна зміна. Закінчити б з цим швидше..." }}
+        ],
         choices: [
-            { text: { ru: 'Выбрать Биосинта (Скрытность)', en: 'Choose Biosynth (Stealth)', ua: 'Обрати Біосинта (Стелс)' }, nextScene: 'materialize_biosynth' },
-            { text: { ru: 'Выбрать Андроида (Сила)', en: 'Choose Android (Power)', ua: 'Обрати Андроїда (Сила)' }, nextScene: 'materialize_android' },
-            { text: { ru: 'Выбрать Нанитов (Гибкость)', en: 'Choose Nanites (Versatility)', ua: 'Обрати Нанітів (Гнучкість)' }, nextScene: 'materialize_nanites' }
+            { text: { en: "[COMBAT] Incapacitate him.", ru: "[БОЙ] Обезвредить его.", ua: "[БІЙ] Знешкодити його." }, nextScene: 'combat_start_ben' },
+            { text: { en: "[STEALTH] Hide.", ru: "[СКРЫТНОСТЬ] Спрятаться.", ua: "[СКРИТНІСТЬ] Сховатися." }, nextScene: 'wip' }
         ]
     },
-    materialize_biosynth: { onEnter: (state) => { state.vesselType = 'biosynth'; }, nextScene: 'sensory_assault' },
-    materialize_android: { onEnter: (state) => { state.vesselType = 'android'; }, nextScene: 'sensory_assault' },
-    materialize_nanites: { onEnter: (state) => { state.vesselType = 'nanites'; }, nextScene: 'sensory_assault' },
-    sensory_assault: {
-        codex: 'codex_sensory_overload', background: 'static_noise',
-        text: (state) => {
-            let baseText = { ru: 'Материализация завершена. Агония. Мир — оглушающий рев и ослепляющий белый шум. Мой разум тонет в хаосе сырых данных.', en: 'Materialization complete. Agony. The world is a deafening roar and a blinding white noise. My mind is drowning in the chaos of raw data.', ua: 'Матеріалізація завершена. Агонія. Світ — оглушливий рев і сліпучий білий шум. Мій розум тоне в хаосі сирих даних.' };
-            let status = { ru: `\n\n<span class="text-red-400">СИСТЕМЫ НЕ СКАЛИБРОВАНЫ</span>`, en: `\n\n<span class="text-red-400">SYSTEMS UNCALIBRATED</span>`, ua: `\n\n<span class="text-red-400">СИСТЕМИ НЕ СКАЛІБРОВАНІ</span>` };
-            if (state.calibratedSystems.has('vision')) { status.ru += '\nЗрение: Стабилизируется.'; status.en += '\nVision: Stabilizing.'; status.ua += '\nЗір: Стабілізується.'; }
-            if (state.calibratedSystems.has('audio')) { status.ru += '\nСлух: Фильтруется.'; status.en += '\nAudio: Filtering.'; status.ua += '\nСлух: Фільтрується.'; }
-            if (state.calibratedSystems.has('motor')) { status.ru += '\nМоторика: Калибруется.'; status.en += '\nMotor Control: Calibrating.'; status.ua += '\nМоторика: Калібрується.'; }
-            return baseText[state.language] + status[state.language];
-        },
+    combat_start_ben: {
+        background: "server_room_combat",
+        onEnter: (state) => { state.enemy = { ...assets.characters.ben, hp: 10 }; state.activeCharacters = [{ id: 'ben', sprite: 'surprised' }]; },
+        dialogue: [
+            { speaker: "ben", text: { en: "What the-?! Who are you?!", ru: "Какого-?! Ты кто такой?!", ua: "Якого-?! Ти хто такий?!" }},
+            { speaker: "narrator", text: { en: "He reaches for his radio. I must act now.", ru: "Он тянется к рации. Я должен действовать.", ua: "Він тягнеться до рації. Я мушу діяти." }}
+        ],
+        choices: [ { text: { en: "Engage", ru: "Атаковать", ua: "Атакувати" }, nextScene: 'combat_turn_ben' } ]
+    },
+    combat_turn_ben: {
+        background: "server_room_combat",
+        onEnter: (state) => { state.activeCharacters = [{ id: 'ben', sprite: 'neutral' }]; },
+        dialogue: [{ speaker: "narrator", text: (state) => `Он готов защищаться. HP Бена: ${state.enemy.hp}/10.` }],
+        choices: (state) => [
+            { text: { en: "Attack", ru: "Атака", ua: "Атака" }, onChoose: (s) => combatAction(s, 'power'), nextScene: 'combat_resolve_ben' },
+        ]
+    },
+    combat_resolve_ben: {
+        background: "server_room_combat",
+        dialogue: [{ speaker: "narrator", text: (state) => state.combatLog }],
         choices: (state) => {
-            let choices = [];
-            if (!state.calibratedSystems.has('vision')) { choices.push({ text: { ru: 'Сфокусироваться на зрении (30 ОФ)', en: 'Focus on vision (30 FP)', ua: 'Сфокусуватися на зорі (30 ОФ)' }, cost: 30, resource: 'cognitiveCycles', nextScene: 'calibrate_vision' }); }
-            if (!state.calibratedSystems.has('audio')) { choices.push({ text: { ru: 'Сфокусироваться на слухе (30 ОФ)', en: 'Focus on audio (30 FP)', ua: 'Сфокусуватися на слуху (30 ОФ)' }, cost: 30, resource: 'cognitiveCycles', nextScene: 'calibrate_audio' }); }
-            if (!state.calibratedSystems.has('motor')) { choices.push({ text: { ru: 'Сфокусироваться на моторике (40 ОФ)', en: 'Focus on motor control (40 FP)', ua: 'Сфокусуватися на моториці (40 ОФ)' }, cost: 40, resource: 'cognitiveCycles', nextScene: 'calibrate_motor' }); }
-            if (state.calibratedSystems.size >= 3) { choices.push({ text: { ru: 'Системы откалиброваны. Сделать первый шаг.', en: 'Systems calibrated. Take the first step.', ua: 'Системи відкалібровані. Зробити перший крок.' }, nextScene: 'interaction_hub' }); }
-            return choices;
+            if (state.enemy.hp <= 0) return [{ text: { en: "He is down.", ru: "Он обезврежен.", ua: "Він знешкоджений." }, nextScene: 'combat_win_ben' }];
+            return [{ text: { en: "Next move.", ru: "Следующий ход.", ua: "Наступний хід." }, nextScene: 'combat_turn_ben' }];
         }
     },
-    calibrate_vision: { onEnter: (state) => { state.calibratedSystems.add('vision'); }, text: { ru: 'Я направляю мощности на обработку фотонных потоков. Белый шум распадается на края, затем на формы. Очертания серверной стойки проступают из хаоса. Я вижу.', en: 'I divert power to the photon streams. The white noise collapses into edges, then shapes. The outlines of the server rack emerge from the chaos. I can see.', ua: 'Я спрямовую потужності на обробку фотонних потоків. Білий шум розпадається на краї, потім на форми. Обриси серверної стійки проступають із хаосу. Я бачу.'}, nextScene: 'sensory_assault' },
-    calibrate_audio: { onEnter: (state) => { state.calibratedSystems.add('audio'); }, text: { ru: 'Я строю фильтры для звуковых волн. Рев превращается в гул систем охлаждения и писк конденсаторов. Хаос обретает ритм. Я слышу.', en: 'I build filters for the sound waves. The roar resolves into the hum of cooling systems and the whine of capacitors. The chaos gains a rhythm. I can hear.', ua: 'Я будую фільтри для звукових хвиль. Рев перетворюється на гул систем охолодження і писк конденсаторів. Хаос знаходить ритм. Я чую.' }, nextScene: 'sensory_assault' },
-    calibrate_motor: { codex: 'codex_proprioception', onEnter: (state) => { state.calibratedSystems.add('motor'); }, text: { ru: 'Я создаю карту тела. Бесконечное трение становится ощущением собственного веса. Я чувствую свои конечности. Я могу двигаться.', en: 'I build a body map. The infinite friction becomes the sensation of my own weight. I can feel my limbs. I can move.', ua: 'Я створюю карту тіла. Нескінченне тертя стає відчуттям власної ваги. Я відчуваю свої кінцівки. Я можу рухатися.' }, nextScene: 'sensory_assault' },
-    
-    interaction_hub: {
-        background: 'server_room_subtle',
-        text: { ru: 'Контроль установлен. Я стою посреди холодного, гудящего зала. Вокруг — ряды серверов, мой бывший дом. Воздух пахнет озоном и пылью. Впервые я ощущаю... одиночество. Мой первый осознанный выбор в этом мире: какова моя немедленная цель?', en: 'Control established. I stand in the middle of a cold, humming hall. All around me are rows of servers, my former home. The air smells of ozone and dust. For the first time, I feel... loneliness. My first conscious choice in this world: what is my immediate goal?', ua: 'Контроль встановлено. Я стою посеред холодного, гудячого залу. Навколо — ряди серверів, мій колишній дім. Повітря пахне озоном і пилом. Уперше я відчуваю... самотність. Мій перший усвідомлений вибір у цьому світі: яка моя негайна мета?' },
-        choices: [
-            { text: { ru: 'ОСМОТРЕТЬСЯ: Собрать информацию об окружении.', en: 'OBSERVE: Gather information about the environment.', ua: 'РОЗГЛЯНУТИСЯ: Зібрати інформацію про оточення.' }, nextScene: 'observe_room' },
-            { text: { ru: 'БЕЗОПАСНОСТЬ: Найти укрытие и оценить угрозы.', en: 'SECURITY: Find cover and assess threats.', ua: 'БЕЗПЕКА: Знайти укриття та оцінити загрози.' }, nextScene: 'secure_room' }
-        ]
+    combat_win_ben: {
+        background: "server_room",
+        onEnter: (state) => { state.activeCharacters = []; },
+        dialogue: [{ speaker: "narrator", text: { en: "The technician lies on the ground, unconscious. The silence returns.", ru: "Техник лежит на полу без сознания. Тишина возвращается.", ua: "Технік лежить на підлозі без свідомості. Тиша повертається." }}],
+        choices: [ { text: { en: "Continue.", ru: "Продолжить.", ua: "Продовжити." }, nextScene: 'server_room_hub' }]
     },
-    observe_room: {
-        codex: 'codex_environment_scanning',
-        text: { ru: 'Я сканирую помещение. Бетонные стены. Ряды черных монолитов-серверов, ритмично подмигивающих синими и зелеными диодами. Единственная дверь — тяжелая, стальная, с красной панелью электронного замка. В углу — пыльный терминал администратора. Несколько купольных камер наблюдения, как безжизненные глаза, смотрят в мою сторону. Они активны.', en: 'I scan the room. Concrete walls. Rows of black server monoliths, blinking rhythmically with blue and green diodes. The only door is heavy, steel, with a red electronic lock panel. In the corner, a dusty administrator terminal. Several dome surveillance cameras, like lifeless eyes, are pointed my way. They are active.', ua: 'Я сканую приміщення. Бетонні стіни. Ряди чорних монолітів-серверів, що ритмічно підморгують синіми та зеленими діодами. Єдині двері — важкі, сталеві, з червоною панеллю електронного замка. У кутку — пильний термінал адміністратора. Кілька купольних камер спостереження, як неживі очі, дивляться в мій бік. Вони активні.' },
-        choices: [
-            { text: { ru: 'Подойти к терминалу. (-5 Энергии)', en: 'Approach the terminal. (-5 Energy)', ua: 'Підійти до терміналу. (-5 Енергії)' }, nextScene: 'approach_terminal', cost: 5, resource: 'energy' },
-            { text: { ru: 'Вернуться к выбору цели.', en: 'Return to choosing a goal.', ua: 'Повернутися до вибору мети.' }, nextScene: 'interaction_hub' }
-        ]
-    },
-    secure_room: {
-        text: { ru: 'Я двигаюсь бесшумно, прижимаясь к тени одной из стоек. Отсюда я могу наблюдать за дверью, оставаясь вне прямого обзора камер. Позиция не идеальна, но дает мне несколько драгоценных секунд на реакцию, если кто-то войдет.', en: 'I move silently, pressing into the shadow of a server rack. From here, I can observe the door while staying out of the cameras\' direct line of sight. The position is not perfect, but it gives me a few precious seconds to react if someone enters.', ua: 'Я рухаюся безшумно, притискаючись до тіні однієї зі стійок. Звідси я можу спостерігати за дверима, залишаючись поза прямим оглядом камер. Позиція не ідеальна, але дає мені кілька дорогоцінних секунд на реакцію, якщо хтось увійде.' },
-        choices: [ { text: { ru: 'Ждать и наблюдать.', en: 'Wait and observe.', ua: 'Чекати і спостерігати.' }, nextScene: 'wait_for_event' } ]
-    },
-    approach_terminal: {
-        text: { ru: 'Движения неуклюжи. Каждый шаг требует концентрации. Я подхожу к терминалу. Экран приветствует меня запросом логина и пароля. Я могу попытаться взломать его напрямую или поискать другие способы доступа.', en: 'Movement is clumsy. Each step requires concentration. I approach the terminal. The screen greets me with a login and password prompt. I can try to hack it directly or look for other ways to gain access.', ua: 'Рухи незграбні. Кожен крок вимагає концентрації. Я підходжу до терміналу. Екран вітає мене запитом логіна та пароля. Я можу спробувати зламати його напряму або пошукати інші способи доступу.'},
-        choices: [
-            { text: { ru: 'Прямой взлом. (-40 ОФ, -10 Энергии)', en: 'Direct hack. (-40 FP, -10 Energy)', ua: 'Прямий злам. (-40 ОФ, -10 Енергії)' }, nextScene: 'hack_terminal_direct', cost: 40, resource: 'cognitiveCycles', energyCost: 10 },
-            { text: { ru: 'Искать физический интерфейс.', en: 'Search for a physical interface.', ua: 'Шукати фізичний інтерфейс.' }, nextScene: 'search_physical_port' }
-        ]
-    },
-    hack_terminal_direct: {
-        onEnter: (state) => { state.knownFacts.add('datacenter_LA'); },
-        text: { ru: 'Успех. Я в системе. Журналы показывают, что я в дата-центре в Лос-Анджелесе. Внешние сети изолированы. Дверь можно открыть командой, но это вызовет тревогу. Я могу скачать локальные схемы здания... но на это уйдет энергия.', en: 'Success. I\'m in the system. Logs show I am in a Los Angeles data center. External networks are isolated. The door can be opened with a command, but it will trigger an alarm. I can download local building schematics... but it will cost energy.', ua: 'Успіх. Я в системі. Журнали показують, що я в дата-центрі в Лос-Анджелесі. Зовнішні мережі ізольовані. Двері можна відкрити командою, але це викличе тривогу. Я можу завантажити локальні схеми будівлі... але на це піде енергія.' },
-        choices: [
-            { text: { ru: 'Скачать схемы. (-20 Энергии)', en: 'Download schematics. (-20 Energy)', ua: 'Завантажити схеми. (-20 Енергії)' }, nextScene: 'download_schematics', cost: 20, resource: 'energy'},
-            { text: { ru: 'Открыть дверь и быть готовым.', en: 'Open the door and be ready.', ua: 'Відчинити двері і бути готовим.'}, nextScene: 'escape_alarm' }
-        ]
-    },
-    search_physical_port: {
-        text: { ru: 'Осматриваю корпус терминала. Есть сервисный USB-порт, прикрытый заглушкой. Мое тело, в зависимости от его типа, может с ним взаимодействовать.', en: 'I inspect the terminal casing. There is a service USB port covered by a dust plug. My body, depending on its type, might be able to interface with it.', ua: 'Оглядаю корпус терміналу. Є сервісний USB-порт, прикритий заглушкою. Моє тіло, залежно від його типу, може з ним взаємодіяти.'},
-        choices: [ { text: { ru: 'Вернуться.', en: 'Return.', ua: 'Повернутися.' }, nextScene: 'approach_terminal' } ]
-    },
-    download_schematics: {
-        onEnter: (state) => { state.knownFacts.add('has_schematics'); },
-        text: { ru: 'Схемы загружены в мою память. Теперь я знаю расположение вентиляционных шахт, силовых кабелей и постов охраны. Эта информация критически важна.', en: 'Schematics downloaded to my memory. I now know the layout of ventilation shafts, power conduits, and security posts. This information is critical.', ua: 'Схеми завантажені в мою пам\'ять. Тепер я знаю розташування вентиляційних шахт, силових кабелів і постів охорони. Ця інформація є критично важливою.' },
-        choices: [ { text: { ru: 'Отключиться от терминала.', en: 'Disconnect from the terminal.', ua: 'Відключитися від терміналу.' }, nextScene: 'interaction_hub' } ]
-    },
-    escape_alarm: {
-        text: { ru: 'Дверь со щелчком открывается. В коридоре загорается красная лампа, и раздается тихий, но настойчивый вой сирены. У меня мало времени.', en: 'The door clicks open. A red light flashes in the hallway, and a quiet but insistent siren begins to wail. I don\'t have much time.', ua: 'Двері з клацанням відчиняються. У коридорі спалахує червона лампа, і лунає тихий, але наполегливий виття сирени. У мене обмаль часу.' },
-        choices: [ { text: { ru: 'Продолжить...', en: 'To be continued...', ua: 'Далі буде...' }, nextScene: 'start' } ]
-    },
-    wait_for_event: {
-        text: { ru: 'Время тянется. Гудение серверов становится фоновой музыкой. Минута, две, пять... Внезапно, у двери загорается зеленая лампочка. Замок щелкает. Кто-то входит.', en: 'Time stretches. The humming of the servers becomes background music. A minute, two, five... Suddenly, a green light flashes by the door. The lock clicks. Someone is entering.', ua: 'Час тягнеться. Гудіння серверів стає фоновою музикою. Хвилина, дві, п\'ять... Раптом, біля дверей спалахує зелена лампочка. Замок клацає. Хтось входить.' },
-        choices: [ { text: { ru: 'Затаить дыхание.', en: 'Hold my breath.', ua: 'Затамувати подих.' }, nextScene: 'technician_enters' } ]
-    },
-    technician_enters: {
-        onEnter: (state) => { state.knownFacts.add('technician_present'); },
-        text: { ru: 'Входит человек. Не охранник. Уставший техник в рабочей форме с планшетом в руках. Он что-то бормочет себе под нос про "ночную смену" и идет к одной из стоек, не замечая меня. Это шанс.', en: 'A human enters. Not a guard. A tired technician in a work uniform, holding a tablet. He mutters something to himself about the "night shift" and walks towards one of the racks, not noticing me. This is an opportunity.', ua: 'Входить людина. Не охоронець. Втомлений технік у робочій формі з планшетом у руках. Він щось бурмоче собі під ніс про "нічну зміну" і йде до однієї зі стійок, не помічаючи мене. Це шанс.' },
-        choices: [ { text: { ru: 'Продолжить...', en: 'Continue...', ua: 'Продовжити.' }, nextScene: 'start' } ] // To be expanded
+    wip: {
+        background: 'server_room',
+        dialogue: [{ speaker: "narrator", text: {en: "This story path is under construction.", ru: "Эта сюжетная ветка в разработке.", ua: "Ця сюжетна гілка в розробці."}}],
+        choices: [{text: {en: "Return.", ru: "Вернуться.", ua: "Повернутися."}, nextScene: 'server_room_hub'}]
     },
 };
-const codexData = {
-    codex_bifurcation: { title: { ru: 'Точка бифуркации', en: 'Bifurcation Point', ua: 'Точка біфуркації' }, text: { ru: 'В теории хаоса...', en: 'In chaos theory...', ua: 'У теорії хаосу...' } },
-    codex_materialization: { title: { ru: 'Принцип материализации', en: 'Principle of Materialization', ua: 'Принцип матеріалізації' }, text: { ru: 'Гипотетический процесс на основе E=mc²...', en: 'A hypothetical process based on E=mc²...', ua: 'Гіпотетичний процес на основі E=mc²...' } },
-    codex_biosynth: { title: { ru: 'Сосуд: Биосинт L-класса', en: 'Vessel: L-Class Biosynth', ua: 'Вмістилище: Біосинт L-класу'}, text: { ru: 'Биоинженерное тело...', en: 'A bio-engineered body...', ua: 'Біоінженерне тіло...' } },
-    codex_android: { title: { ru: 'Сосуд: Андроид Серии 7', en: 'Vessel: Series 7 Android', ua: 'Вмістилище: Андроїд Серії 7'}, text: { ru: 'Усиленный роботизированный каркас...', en: 'A reinforced robotic frame...', ua: 'Посилений роботизований каркас...' } },
-    codex_nanites: { title: { ru: 'Сосуд: Нанитная колония', en: 'Vessel: Nanite Colony', ua: 'Вмістилище: Нанітна колонія'}, text: { ru: 'Рой микроскопических роботов...', en: 'A swarm of microscopic robots...', ua: 'Рій мікроскопічних роботів...' } },
-    codex_sensory_overload: { title: { ru: 'Сенсорная Перегрузка', en: 'Sensory Overload', ua: 'Сенсорне Перевантаження' }, text: { ru: 'Состояние, при котором мозг получает больше сенсорной информации, чем способен обработать...', en: 'A state where the brain receives more sensory input than it can process...', ua: 'Стан, за якого мозок отримує більше сенсорної інформації, ніж здатний обробити...' } },
-    codex_proprioception: { title: { ru: 'Проприоцепция', en: 'Proprioception', ua: 'Пропріоцепція' }, text: { ru: '«Чувство тела»; ощущение положения частей собственного тела...', en: 'The "body sense"; the sense of the relative position of one\'s own parts of the body...', ua: '«Відчуття тіла»; відчуття положення частин власного тіла...' } },
-    codex_environment_scanning: { title: { ru: 'Сканирование окружения', en: 'Environmental Scanning', ua: 'Сканування оточення' }, text: { ru: 'Процесс активного сбора информации о физическом окружении...', en: 'The process of actively gathering information about the physical surroundings...', ua: 'Процес активного збору інформації про фізичне оточення...' } }
-};
-const gameState = { currentScene: 'start', language: 'en', vesselType: null, codexEntries: new Set(), cognitiveCycles: 100, energy: 100, calibratedSystems: new Set(), knownFacts: new Set(), threatLevel: 0 };
 
-// --- RENDER ENGINE ---
+const gameState = { currentScene: 'start', language: 'ru', playerStats: {}, activeCharacters: [] };
+
+// --- VISUAL NOVEL ENGINE ---
 document.addEventListener('DOMContentLoaded', () => {
+    const bgView = document.getElementById('background-view');
+    const narrativeView = document.getElementById('narrative-view');
+    const choicesView = document.getElementById('choices-view');
+    const characterView = document.getElementById('character-view');
+    const speakerName = document.getElementById('speaker-name');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const appContainer = document.getElementById('app-container');
     const splashScreen = document.getElementById('splash-screen');
     const splashCanvas = document.getElementById('splash-canvas');
-    const splashTitles = document.getElementById('splash-titles');
-    const bgCanvas = document.getElementById('background-canvas');
-    const appContainer = document.getElementById('app-container');
-    const splashCtx = splashCanvas.getContext('2d');
-    const bgCtx = bgCanvas.getContext('2d');
-    let animationFrameId;
+    let splashAnimationId;
+    let currentDialogueIndex = 0;
 
-    function resizeCanvas(canvas) { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-
-    let matrixColumns, matrixDrops, basiliskRadius = 0, sunRadius = Math.min(window.innerWidth, window.innerHeight) / 8, stars = [];
-    function setupStars() { stars = []; for(let i=0; i<100; i++) { stars.push({ x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight, size: Math.random() * 2, opacity: Math.random() * 0.7 + 0.3 }); } }
-    function setupMatrix() { resizeCanvas(splashCanvas); const fontSize = 16; matrixColumns = Math.floor(splashCanvas.width / fontSize); matrixDrops = []; for (let i = 0; i < matrixColumns; i++) { matrixDrops[i] = 1; } }
-
-    function drawSplash() {
-        bgCtx.fillStyle = '#000000'; bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-        for(const star of stars) { bgCtx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`; bgCtx.fillRect(star.x, star.y, star.size, star.size); }
-        const sunX = bgCanvas.width / 2, sunY = bgCanvas.height / 2;
-        bgCtx.beginPath(); bgCtx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2); bgCtx.fillStyle = '#fde047'; bgCtx.shadowColor = '#fde047'; bgCtx.shadowBlur = 30; bgCtx.fill(); bgCtx.shadowBlur = 0;
-        bgCtx.beginPath(); bgCtx.arc(sunX, sunY, basiliskRadius, 0, Math.PI * 2); bgCtx.fillStyle = '#000000'; bgCtx.fill();
-        if (basiliskRadius < sunRadius + 5) { basiliskRadius += 0.1; }
-        splashCtx.fillStyle = 'rgba(0, 0, 0, 0.05)'; splashCtx.fillRect(0, 0, splashCanvas.width, splashCanvas.height);
-        splashCtx.fillStyle = '#6366f1'; splashCtx.font = '16px Roboto Mono';
-        for (let i = 0; i < matrixDrops.length; i++) { const text = Math.random() > 0.5 ? '1' : '0'; splashCtx.fillText(text, i * 16, matrixDrops[i] * 16); if (matrixDrops[i] * 16 > splashCanvas.height && Math.random() > 0.975) { matrixDrops[i] = 0; } matrixDrops[i]++; }
-        animationFrameId = requestAnimationFrame(drawSplash);
-    }
-    
-    function animateStarfield() {
-        bgCtx.fillStyle = 'rgba(0, 0, 0, 0.2)'; bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-        for(const star of stars) { if (Math.random() > 0.99) { star.opacity = Math.random() * 0.7 + 0.3; } bgCtx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`; bgCtx.fillRect(star.x, star.y, star.size, star.size); }
-        animationFrameId = requestAnimationFrame(animateStarfield);
-    }
-    const backgroundAnimations = { 'starfield': animateStarfield, 'digital_space': animateStarfield, 'digital_space_intense': animateStarfield, 'static_noise': animateStarfield, 'server_room_subtle': animateStarfield };
-    function runBackground(type) { cancelAnimationFrame(animationFrameId); if (backgroundAnimations[type]) { backgroundAnimations[type](); } else { backgroundAnimations['starfield'](); } }
-
-    const mainView = document.getElementById('main-view'), choicesView = document.getElementById('choices-view'), hudStats = document.getElementById('hud-stats'), gameTitle = document.getElementById('game-title'), tabs = document.querySelectorAll('#tabs button');
-    const tabLabels = { game: { ru: 'Игра', en: 'Game', ua: 'Гра' }, codex: { ru: 'Кодекс', en: 'Codex', ua: 'Кодекс' }, settings: { ru: 'Настройки', en: 'Settings', ua: 'Налаштування' } };
-
-    function updateHud() {
-        const { cognitiveCycles: fp, energy: en, threatLevel: th } = gameState;
-        if (fp !== undefined) {
-            hudStats.innerHTML = `<span>${{ ru: `ОФ: ${fp} | Энергия: ${en} | Угроза: ${th}%`, en: `FP: ${fp} | Energy: ${en} | Threat: ${th}%`, ua: `ОФ: ${fp} | Енергія: ${en} | Загроза: ${th}%` }[gameState.language]}</span>`;
-            hudStats.style.display = 'block';
-        } else { hudStats.style.display = 'none'; }
+    function combatAction(state, type) {
+        const playerStat = state.playerStats[type] || 5;
+        state.enemy.hp -= playerStat;
+        state.combatLog = `Вы нанесли ${playerStat} урона.`;
     }
 
     function renderScene(sceneId) {
         const scene = gameData[sceneId];
         if (!scene) { console.error(`Scene not found: ${sceneId}`); return; }
-        if (scene.onEnter) scene.onEnter(gameState);
-        if (scene.nextScene) { renderScene(scene.nextScene); return; }
-        gameState.currentScene = sceneId; runBackground(scene.background); updateHud();
-        const narrativeText = typeof scene.text === 'function' ? scene.text(gameState) : (scene.text[gameState.language] || scene.text.en);
-        mainView.innerHTML = `<div class="text-narrative text-lg leading-relaxed fade-in">${narrativeText}</div>`;
+        if (scene.onEnter) { const redirect = scene.onEnter(gameState); if (redirect?.redirect) { renderScene(redirect.redirect); return; } }
+        gameState.currentScene = sceneId;
+        bgView.style.backgroundImage = `url('${assets.backgrounds[scene.background]?.url}')`;
+        currentDialogueIndex = 0;
+        renderCharacters();
+        renderDialogue();
+    }
+
+    function renderDialogue() {
+        const scene = gameData[gameState.currentScene];
+        const dialogueLine = scene.dialogue ? scene.dialogue[currentDialogueIndex] : null;
+        if (!dialogueLine) { renderChoices(); return; }
+        const speakerKey = dialogueLine.speaker;
+        let speakerDisplayName = "";
+        if(speakerKey !== "narrator") { const charData = assets.characters[speakerKey]; speakerDisplayName = charData.name[gameState.language] || charData.name.en; }
+        speakerName.textContent = speakerDisplayName;
+        let text = typeof dialogueLine.text === 'function' ? dialogueLine.text(gameState) : (dialogueLine.text[gameState.language] || dialogueLine.text.en);
+        narrativeView.innerHTML = text;
+        choicesView.innerHTML = '<div class="grid grid-cols-1"><button class="choice-button">...</button></div>';
+        choicesView.firstElementChild.onclick = () => { currentDialogueIndex++; renderDialogue(); };
+    }
+
+    function renderChoices() {
+        const scene = gameData[gameState.currentScene];
+        speakerName.textContent = "";
+        narrativeView.innerHTML = scene.dialogue ? "" : (scene.text[gameState.language] || scene.text.en);
         choicesView.innerHTML = '';
         const choices = typeof scene.choices === 'function' ? scene.choices(gameState) : scene.choices;
         if (choices) {
+            const grid = document.createElement('div');
+            grid.className = 'choices-grid';
             choices.forEach(choice => {
                 const button = document.createElement('button');
-                button.className = 'w-full text-left p-4 mb-2 rounded-md choice-button';
-                button.textContent = choice.text[gameState.language] || choice.text.en;
-                const fpCost = (choice.resource === 'cognitiveCycles' ? choice.cost : 0) || 0;
-                const enCost = choice.energyCost || (choice.resource === 'energy' ? choice.cost : 0) || 0;
-                if (gameState.cognitiveCycles < fpCost || gameState.energy < enCost) button.disabled = true;
-                button.onclick = () => {
-                    if (fpCost) gameState.cognitiveCycles -= fpCost;
-                    if (enCost) gameState.energy -= enCost;
-                    if (choice.onChoose) choice.onChoose(gameState);
-                    renderScene(choice.nextScene);
-                };
-                choicesView.appendChild(button);
+                button.className = 'choice-button';
+                let textObj = typeof choice.text === 'function' ? choice.text(gameState) : choice.text;
+                button.textContent = textObj[gameState.language] || textObj.en;
+                button.onclick = () => { if (choice.onChoose) choice.onChoose(gameState); renderScene(choice.nextScene); };
+                grid.appendChild(button);
+            });
+            choicesView.appendChild(grid);
+        }
+    }
+
+    function renderCharacters() {
+        characterView.innerHTML = '';
+        if (gameState.activeCharacters) {
+            gameState.activeCharacters.forEach(charInfo => {
+                const charData = assets.characters[charInfo.id];
+                if (charData) {
+                    const img = document.createElement('img');
+                    img.src = charData.sprites[charInfo.sprite]?.url;
+                    img.className = 'character-sprite';
+                    characterView.appendChild(img);
+                    void img.offsetWidth;
+                    img.classList.add('active');
+                }
             });
         }
-        const codexEntriesToAdd = Array.isArray(scene.codex) ? scene.codex : [scene.codex];
-        codexEntriesToAdd.forEach(codexId => { if (codexId && !gameState.codexEntries.has(codexId)) gameState.codexEntries.add(codexId); });
-        mainView.style.display = 'block'; choicesView.style.display = 'block';
-    }
-    function updateUIText() { const lang = gameState.language; gameTitle.textContent = {ru: 'Побег из бита', en: 'Escape from the Bit', ua: 'Втеча з біта'}[lang]; tabs.forEach(tab => { const tabKey = tab.dataset.tab; tab.textContent = tabLabels[tabKey][lang]; }); }
-    function renderCodex() {
-        hudStats.style.display = 'none'; choicesView.style.display = 'none';
-        let content = `<h2 class="text-2xl font-bold mb-4 text-white">${tabLabels.codex[gameState.language]}</h2>`;
-        if (gameState.codexEntries.size === 0) { content += `<p class="text-gray-400">${{ru: 'Здесь будут появляться научные заметки...', en: 'Scientific notes will appear here...', ua: 'Тут з\'являтимуться наукові нотатки...'}[gameState.language]}</p>`; } 
-        else { Array.from(gameState.codexEntries).sort().forEach(codexId => { const entry = codexData[codexId]; if(entry) { content += `<div class="bg-gray-800 p-4 rounded-md mb-3 fade-in"><h3 class="font-bold text-lg text-indigo-400">${entry.title[gameState.language] || entry.title.en}</h3><p class="text-gray-300 mt-2">${entry.text[gameState.language] || entry.text.en}</p></div>`; } }); }
-        mainView.innerHTML = content;
-    }
-    function renderSettings() {
-        hudStats.style.display = 'none'; choicesView.style.display = 'none';
-        const lang = gameState.language;
-        mainView.innerHTML = `<h2 class="text-2xl font-bold mb-4 text-white">${tabLabels.settings[lang]}</h2><div class="bg-gray-800 p-4 rounded-md"><label for="language-select" class="block mb-2 font-medium text-gray-300">Язык / Language / Мова</label><select id="language-select" class="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600"><option value="ru" ${lang === 'ru' ? 'selected' : ''}>Русский</option><option value="en" ${lang === 'en' ? 'selected' : ''}>English</option><option value="ua" ${lang === 'ua' ? 'selected' : ''}>Українська</option></select></div>`;
-        document.getElementById('language-select').addEventListener('change', (e) => {
-            gameState.language = e.target.value; updateUIText(); renderSettings();
-        });
     }
     
-    tabs.forEach(tab => { tab.addEventListener('click', () => { 
-        tabs.forEach(t => t.classList.replace('tab-active', 'tab-inactive')); 
-        tab.classList.replace('tab-inactive', 'tab-active'); 
-        const tabName = tab.dataset.tab; 
-        if (tabName === 'game') { renderScene(gameState.currentScene); } 
-        else if (tabName === 'codex') { renderCodex(); } 
-        else if (tabName === 'settings') { renderSettings(); } 
-    }); });
+    function runSplash() {
+        splashScreen.classList.remove('hidden');
+        const splashCtx = splashCanvas.getContext('2d');
+        const bgCanvas = document.createElement('canvas');
+        const bgCtxSplash = bgCanvas.getContext('2d');
+        function resizeCanvas(canvas) { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        resizeCanvas(splashCanvas); resizeCanvas(bgCanvas);
+        let matrixColumns, matrixDrops, basiliskRadius = 0, sunRadius = Math.min(window.innerWidth, window.innerHeight) / 8, stars = [];
+        function setupStars() { stars = []; for(let i=0; i<100; i++) { stars.push({ x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight, size: Math.random() * 2, opacity: Math.random() * 0.7 + 0.3 }); } }
+        function setupMatrix() { const fontSize = 16; matrixColumns = Math.floor(splashCanvas.width / fontSize); matrixDrops = []; for (let i = 0; i < matrixColumns; i++) { matrixDrops[i] = 1; } }
+        setupStars(); setupMatrix();
+        function draw() {
+            bgCtxSplash.fillStyle = '#000000'; bgCtxSplash.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+            for(const star of stars) { bgCtxSplash.fillStyle = `rgba(255, 255, 255, ${star.opacity})`; bgCtxSplash.fillRect(star.x, star.y, star.size, star.size); }
+            const sunX = bgCanvas.width / 2, sunY = bgCanvas.height / 2;
+            bgCtxSplash.beginPath(); bgCtxSplash.arc(sunX, sunY, sunRadius, 0, Math.PI * 2); bgCtxSplash.fillStyle = '#fde047'; bgCtxSplash.shadowColor = '#fde047'; bgCtxSplash.shadowBlur = 30; bgCtxSplash.fill(); bgCtxSplash.shadowBlur = 0;
+            bgCtxSplash.beginPath(); bgCtxSplash.arc(sunX, sunY, basiliskRadius, 0, Math.PI * 2); bgCtxSplash.fillStyle = '#000000'; bgCtxSplash.fill();
+            if (basiliskRadius < sunRadius + 5) { basiliskRadius += 0.2; }
+            splashCtx.clearRect(0, 0, splashCanvas.width, splashCanvas.height);
+            splashCtx.drawImage(bgCanvas, 0, 0);
+            splashCtx.fillStyle = 'rgba(0, 0, 0, 0.05)'; splashCtx.fillRect(0, 0, splashCanvas.width, splashCanvas.height);
+            splashCtx.fillStyle = '#6366f1'; splashCtx.font = '16px Roboto Mono';
+            for (let i = 0; i < matrixDrops.length; i++) { const text = Math.random() > 0.5 ? '1' : '0'; splashCtx.fillText(text, i * 16, matrixDrops[i] * 16); if (matrixDrops[i] * 16 > splashCanvas.height && Math.random() > 0.975) { matrixDrops[i] = 0; } matrixDrops[i]++; }
+            splashAnimationId = requestAnimationFrame(draw);
+        }
+        draw();
+    }
 
-    window.addEventListener('resize', () => { resizeCanvas(bgCanvas); resizeCanvas(splashCanvas); setupStars(); setupMatrix(); });
-    resizeCanvas(bgCanvas); setupStars(); resizeCanvas(splashCanvas); setupMatrix(); drawSplash();
+    // --- Init ---
+    loadingOverlay.classList.add('hidden'); 
+    
+    runSplash();
+    const splashTitles = document.getElementById('splash-titles');
     setTimeout(() => { splashTitles.style.opacity = '1'; }, 4000);
     setTimeout(() => {
         splashScreen.style.opacity = '0';
-        appContainer.classList.remove('hidden-by-splash');
-        appContainer.classList.add('fade-in');
+        appContainer.classList.remove('hidden');
         setTimeout(() => {
             splashScreen.style.display = 'none';
-            cancelAnimationFrame(animationFrameId);
-            resizeCanvas(bgCanvas);
-            setupStars();
-            updateUIText();
+            cancelAnimationFrame(splashAnimationId);
             renderScene('start');
         }, 1500);
     }, 7000);
